@@ -60,6 +60,12 @@ module.exports = function (RED) {
 		var isConnected = false;
 
 		/**
+		 * The overall status of the flow indicating if it can store data
+		 * @type {boolean} canStore === true, otherwise false
+		 */
+		var canStore = false;
+
+		/**
 		 * Store status msg object received while sqlite waiting on I/O opening the DB
 		 * @type {Array}
 		 */
@@ -196,9 +202,18 @@ module.exports = function (RED) {
 					fill:"green", shape:"dot", text:"Forwarding" + remaining
 				} ;
 			}
-			else if(!isConnected) {
+			else if(!isConnected && canStore) {
 				s = {
-					fill:"yellow", shape:"ring", text:"Storing" + remaining
+					fill:"yellow", shape:"dot", text:"Storing" + remaining
+				} ;
+			}else if(!isConnected && !canStore) {
+				s = {
+					fill:"yellow", shape:"dot", text:"Not Storing" + remaining
+				} ;
+			}
+			else if(isConnected && !canStore) {
+				s = {
+					fill:"yellow", shape:"ring", text:"Discarding" + remaining
 				} ;
 			}
 			// Only update our status if it has changed
@@ -327,17 +342,29 @@ module.exports = function (RED) {
 			// Once the queue has been opened, we can start listening for input from node-red
 			node.on('input', function (msg) {
 
+				console.log("Messsage recieved: ", msg);
+				console.log("Messsage payload: ", msg.payload );
+				console.log("Messsage status: ", msg.payload.MainServer );
+
+				if (msg.payload && msg.payload.MainServer){
+					canStore = msg.payload.MainServer;
+					console.log(msg.payload.MainServer);
+					statusOutput();
+				}
+
 				// status message
 				if (msg.hasOwnProperty('status')) {
 					processStatus(msg) ;
 					return ;
 				}
 
+				console.log(canStore);
 				// upstream message to send on
 				if(isConnected && queue.isEmpty()) {
-						node.send(msg);
-				} else {
-					queue.add(msg) ;
+					node.send(msg);
+				}
+				else if (canStore) {
+					queue.add(msg) ; //Diferenca
 				}
 			});
 		}) ;
